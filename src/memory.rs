@@ -1,5 +1,6 @@
 use core::fmt;
 
+use bitflags::bitflags;
 use embedded_hal::{
     delay::DelayNs,
     spi::{Operation, SpiDevice},
@@ -47,6 +48,19 @@ impl<SPI: SpiDevice> fmt::Debug for Error<SPI> {
                 .field("addr", addr)
                 .finish(),
         }
+    }
+}
+
+bitflags! {
+    /// The Status-1 reguster
+    ///
+    /// NOTE:
+    /// This struct is incomplete. Currenly it only include those values,
+    /// that is needed for the implementation.
+    #[derive(Debug, Clone, Copy)]
+    pub struct Status1: u8 {
+        const IsBusy = 1 << 0;
+        const _ = !0;
     }
 }
 
@@ -114,16 +128,6 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
         Ok(())
     }
 
-    fn write_enable(&mut self) -> Result<(), Error<SPI>> {
-        trace!("write enable init");
-        let cmd = [0x06];
-
-        self.spi.write(&cmd).map_err(Error::IO)?;
-
-        trace!("write enable done");
-        Ok(())
-    }
-
     pub fn sector_erase(&mut self, addr: Addr) -> Result<(), Error<SPI>> {
         debug!("sector erase init: at {}", addr);
 
@@ -134,25 +138,22 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
         Self::addr_write_bytes(addr, cmd.sub_array_mut(1), Some(SECTOR_SIZE))?;
 
         self.spi.write(&cmd).map_err(Error::IO)?;
-        // TODO: use until_ready
-        self.delay.delay_ms(400 + 10);
+        self.block_until_ready()?;
 
         debug!("sector erase done: at {}", addr);
         Ok(())
     }
 
-    pub fn chip_erase(&mut self, addr: Addr) -> Result<(), Error<SPI>> {
-        debug!("chip erase init: at {}", addr);
+    pub fn chip_erase(&mut self) -> Result<(), Error<SPI>> {
+        debug!("chip erase init");
 
         self.write_enable()?;
 
         let cmd = [0x60];
         self.spi.write(&cmd).map_err(Error::IO)?;
+        self.block_until_ready()?;
 
-        // TODO: use until_ready
-        self.delay.delay_ms((50 + 5) * 1000);
-
-        debug!("chip erase done: at {}", addr);
+        debug!("chip erase done");
         Ok(())
     }
 
@@ -172,10 +173,49 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
         self.spi
             .transaction(&mut [Operation::Write(&cmd), Operation::Write(data)])
             .map_err(Error::IO)?;
-        // TODO: use until_ready
-        self.delay.delay_ms(3 + 1);
+        self.block_until_ready()?;
 
         debug!("write data done: at {}", addr);
+        Ok(())
+    }
+
+    pub fn get_status_1(&mut self) -> Result<Status1, Error<SPI>> {
+        trace!("get status init");
+
+        let cmd = [0x05];
+        let mut data = [0; 1];
+        self.spi
+            .transaction(&mut [Operation::Write(&cmd), Operation::Read(&mut data)])
+            .map_err(Error::IO)?;
+
+        let status = Status1::from_bits(data[0]).expect("unreachable");
+
+        trace!("get status done: {status:?}");
+        Ok(status)
+    }
+
+    fn block_until_ready(&mut self) -> Result<(), Error<SPI>> {
+        debug!("blocking until ready init");
+
+        // XXX: let's hope this loop will ever finish
+        loop {
+            let status = self.get_status_1()?;
+            if !status.contains(Status1::IsBusy) {
+                break;
+            }
+        }
+
+        debug!("blocking until ready done");
+        Ok(())
+    }
+
+    fn write_enable(&mut self) -> Result<(), Error<SPI>> {
+        trace!("write enable init");
+        let cmd = [0x06];
+
+        self.spi.write(&cmd).map_err(Error::IO)?;
+
+        trace!("write enable done");
         Ok(())
     }
 
