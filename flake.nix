@@ -29,7 +29,7 @@
         ]);
 
       shell = mkShell {
-        name = "sfs-shell";
+        name = "w25-shell";
 
         buildInputs =
           [rustToolchain]
