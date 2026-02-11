@@ -8,7 +8,7 @@ use embedded_hal::{
 use sub_array::SubArray;
 use thiserror::Error;
 
-use crate::util::{debug, trace};
+use crate::util::trace;
 
 pub type Addr = u32;
 
@@ -75,19 +75,19 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
     }
 
     pub fn reset(&mut self) -> Result<(), Error<SPI>> {
-        debug!("reset init");
+        trace!("reset init");
 
         let cmd = [0x66, 0x99];
 
         self.spi.write(&cmd).map_err(Error::IO)?;
         self.delay.delay_us(30 + 5);
 
-        debug!("reset done");
+        trace!("reset done");
         Ok(())
     }
 
     pub fn get_jedec_id(&mut self) -> Result<[u8; 3], Error<SPI>> {
-        debug!("read JEDEC ID init");
+        trace!("read JEDEC ID init");
 
         let cmd = [0x9F];
         let mut data = [0u8; 3];
@@ -96,17 +96,17 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
             .transaction(&mut [Operation::Write(&cmd), Operation::Read(&mut data)])
             .map_err(Error::IO)?;
 
-        debug!("read JEDEC ID done: {data:02X?}");
+        trace!("read JEDEC ID done: {data:02X?}");
         Ok(data)
     }
 
     pub fn check_jedec_id(&mut self) -> Result<(), Error<SPI>> {
-        debug!("check JEDEC ID init");
+        trace!("check JEDEC ID init");
 
         let jedec_id = self.get_jedec_id()?;
 
         if jedec_id == JEDEC_ID {
-            debug!("check JEDEC ID done");
+            trace!("check JEDEC ID done");
             Ok(())
         } else {
             Err(Error::WrongJedecId(jedec_id))
@@ -114,7 +114,7 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
     }
 
     pub fn read(&mut self, addr: Addr, data: &mut [u8]) -> Result<(), Error<SPI>> {
-        debug!("read data init: {} bytes at {}", data.len(), addr);
+        trace!("read data init: {} bytes at {}", data.len(), addr);
 
         let mut cmd = [0u8; 4];
         cmd[0] = 0x0B;
@@ -124,12 +124,12 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
             .transaction(&mut [Operation::Write(&cmd), Operation::Read(data)])
             .map_err(Error::IO)?;
 
-        debug!("read data done: {} bytes at {}", data.len(), addr);
+        trace!("read data done: {} bytes at {}", data.len(), addr);
         Ok(())
     }
 
     pub fn sector_erase(&mut self, addr: Addr) -> Result<(), Error<SPI>> {
-        debug!("sector erase init: at {}", addr);
+        trace!("sector erase init: at {}", addr);
 
         self.write_enable()?;
 
@@ -140,12 +140,12 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
         self.spi.write(&cmd).map_err(Error::IO)?;
         self.block_until_ready()?;
 
-        debug!("sector erase done: at {}", addr);
+        trace!("sector erase done: at {}", addr);
         Ok(())
     }
 
     pub fn chip_erase(&mut self) -> Result<(), Error<SPI>> {
-        debug!("chip erase init");
+        trace!("chip erase init");
 
         self.write_enable()?;
 
@@ -153,7 +153,7 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
         self.spi.write(&cmd).map_err(Error::IO)?;
         self.block_until_ready()?;
 
-        debug!("chip erase done");
+        trace!("chip erase done");
         Ok(())
     }
 
@@ -162,7 +162,7 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
         addr: Addr,
         data: &[u8; PAGE_SIZE as usize],
     ) -> Result<(), Error<SPI>> {
-        debug!("write data init: at {}", addr);
+        trace!("write data init: at {}", addr);
 
         self.write_enable()?;
 
@@ -175,13 +175,11 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
             .map_err(Error::IO)?;
         self.block_until_ready()?;
 
-        debug!("write data done: at {}", addr);
+        trace!("write data done: at {}", addr);
         Ok(())
     }
 
     pub fn get_status_1(&mut self) -> Result<Status1, Error<SPI>> {
-        trace!("get status init");
-
         let cmd = [0x05];
         let mut data = [0; 1];
         self.spi
@@ -190,12 +188,11 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
 
         let status = Status1::from_bits(data[0]).expect("unreachable");
 
-        trace!("get status done: {status:?}");
         Ok(status)
     }
 
     fn block_until_ready(&mut self) -> Result<(), Error<SPI>> {
-        debug!("blocking until ready init");
+        trace!("blocking until ready init");
 
         // XXX: let's hope this loop will ever finish
         loop {
@@ -205,7 +202,7 @@ impl<SPI: SpiDevice, DELAY: DelayNs> Memory<SPI, DELAY> {
             }
         }
 
-        debug!("blocking until ready done");
+        trace!("blocking until ready done");
         Ok(())
     }
 
