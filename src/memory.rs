@@ -76,7 +76,7 @@ impl<SPI: SpiDevice> Memory<SPI> {
     }
 
     pub async fn reset(&mut self) -> Result<(), Error<SPI>> {
-        trace!("reset init");
+        trace!("reset - init");
 
         let cmd = [0x66, 0x99];
 
@@ -85,12 +85,12 @@ impl<SPI: SpiDevice> Memory<SPI> {
             .await?;
         Timer::after_micros(30 + 5).await;
 
-        trace!("reset done");
+        trace!("reset - done");
         Ok(())
     }
 
     pub async fn get_jedec_id(&mut self) -> Result<[u8; 3], Error<SPI>> {
-        trace!("read JEDEC ID init");
+        trace!("read JEDEC ID - init");
 
         let cmd = [0x9F];
         let mut data = [0u8; 3];
@@ -100,17 +100,17 @@ impl<SPI: SpiDevice> Memory<SPI> {
             .await
             .map_err(Error::IO)?;
 
-        trace!("read JEDEC ID done: {data:02X?}");
+        trace!("read JEDEC ID - done: {data:02X?}");
         Ok(data)
     }
 
     pub async fn check_jedec_id(&mut self) -> Result<(), Error<SPI>> {
-        trace!("check JEDEC ID init");
+        trace!("check JEDEC ID - init");
 
         let jedec_id = self.get_jedec_id().await?;
 
         if jedec_id == JEDEC_ID {
-            trace!("check JEDEC ID done");
+            trace!("check JEDEC ID - done");
             Ok(())
         } else {
             Err(Error::WrongJedecId(jedec_id))
@@ -118,7 +118,7 @@ impl<SPI: SpiDevice> Memory<SPI> {
     }
 
     pub async fn read(&mut self, addr: Addr, data: &mut [u8]) -> Result<(), Error<SPI>> {
-        trace!("read data init: {} bytes at {}", data.len(), addr);
+        trace!("read data - init: {} bytes at {}", data.len(), addr);
 
         let mut cmd = [0u8; 4];
         cmd[0] = 0x0B;
@@ -129,14 +129,14 @@ impl<SPI: SpiDevice> Memory<SPI> {
             .await
             .map_err(Error::IO)?;
 
-        trace!("read data done: {} bytes at {}", data.len(), addr);
+        trace!("read data - done: {} bytes at {}", data.len(), addr);
         Ok(())
     }
 
-    pub async fn sector_erase(&mut self, addr: Addr) -> Result<(), Error<SPI>> {
-        trace!("sector erase init: at {}", addr);
+    pub async fn erase_sector(&mut self, addr: Addr) -> Result<(), Error<SPI>> {
+        trace!("erase sector - init: at {}", addr);
 
-        self.write_enable().await?;
+        self.enable_write().await?;
 
         let mut cmd = [0u8; 4];
         cmd[0] = 0x20;
@@ -146,31 +146,31 @@ impl<SPI: SpiDevice> Memory<SPI> {
         self.block_until_ready(Duration::from_millis(400 + 50))
             .await?;
 
-        trace!("sector erase done: at {}", addr);
+        trace!("erase sector - done: at {}", addr);
         Ok(())
     }
 
-    pub async fn chip_erase(&mut self) -> Result<(), Error<SPI>> {
-        trace!("chip erase init");
+    pub async fn erase_chip(&mut self) -> Result<(), Error<SPI>> {
+        trace!("erase chip - init");
 
-        self.write_enable().await?;
+        self.enable_write().await?;
 
         let cmd = [0x60];
         self.spi.write(&cmd).await.map_err(Error::IO)?;
         self.block_until_ready(Duration::from_secs(50 + 5)).await?;
 
-        trace!("chip erase done");
+        trace!("erase chip - done");
         Ok(())
     }
 
-    pub async fn page_write(
+    pub async fn write_page(
         &mut self,
         addr: Addr,
         data: &[u8; PAGE_SIZE as usize],
     ) -> Result<(), Error<SPI>> {
-        trace!("write data init: at {}", addr);
+        trace!("write page - init: at {}", addr);
 
-        self.write_enable().await?;
+        self.enable_write().await?;
 
         let mut cmd = [0u8; 4];
         cmd[0] = 0x02;
@@ -182,7 +182,7 @@ impl<SPI: SpiDevice> Memory<SPI> {
             .map_err(Error::IO)?;
         self.block_until_ready(Duration::from_millis(3 + 1)).await?;
 
-        trace!("write data done: at {}", addr);
+        trace!("write page - done: at {}", addr);
         Ok(())
     }
 
@@ -200,18 +200,16 @@ impl<SPI: SpiDevice> Memory<SPI> {
         Ok(status)
     }
 
-    async fn write_enable(&mut self) -> Result<(), Error<SPI>> {
-        trace!("write enable init");
+    async fn enable_write(&mut self) -> Result<(), Error<SPI>> {
         let cmd = [0x06];
 
         self.spi.write(&cmd).await.map_err(Error::IO)?;
 
-        trace!("write enable done");
         Ok(())
     }
 
     async fn block_until_ready(&mut self, timeout: Duration) -> Result<(), Error<SPI>> {
-        trace!("blocking until ready init");
+        trace!("blocking until ready - init");
 
         let poll_delay = timeout / 100;
 
@@ -229,7 +227,7 @@ impl<SPI: SpiDevice> Memory<SPI> {
         .await
         .map_err(|_| Error::UnexpectedBusy)??;
 
-        trace!("blocking until ready done");
+        trace!("blocking until ready - done");
         Ok(())
     }
 
