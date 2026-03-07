@@ -27,6 +27,11 @@ pub enum Error<SPI: SpiDevice> {
     #[error("wrong alignment: address {addr:X} is not a multiple of {align:X}")]
     WrongAlignment { addr: Addr, align: Addr },
 
+    #[error(
+        "writing across page boundary: address: {addr:X}, data_len: {data_len:X}, page_size: {PAGE_SIZE:X}"
+    )]
+    WriteAcrossPageBoundary { addr: Addr, data_len: Addr },
+
     #[error("address should be less than {END_ADDR:X}, got: {addr:X}")]
     AddressOverflow { addr: Addr },
 
@@ -43,6 +48,14 @@ impl<SPI: SpiDevice> fmt::Debug for Error<SPI> {
                 .debug_struct("WrongAlignment")
                 .field("addr", addr)
                 .field("align", align)
+                .finish(),
+            Error::WriteAcrossPageBoundary {
+                addr,
+                data_len: data_size,
+            } => f
+                .debug_struct("WriteAcrossPageBoundary")
+                .field("addr", addr)
+                .field("data_size", data_size)
                 .finish(),
             Error::AddressOverflow { addr } => f
                 .debug_struct("AddressOverflow")
@@ -124,8 +137,14 @@ impl<SPI: SpiDevice> Memory<SPI> {
         cmd[0] = 0x0B;
         Self::addr_write_bytes(addr, cmd.sub_array_mut(1), None)?;
 
+        let dummy = [0];
+
         self.spi
-            .transaction(&mut [Operation::Write(&cmd), Operation::Read(data)])
+            .transaction(&mut [
+                Operation::Write(&cmd),
+                Operation::Write(&dummy),
+                Operation::Read(data),
+            ])
             .await
             .map_err(Error::IO)?;
 
@@ -180,9 +199,35 @@ impl<SPI: SpiDevice> Memory<SPI> {
             .transaction(&mut [Operation::Write(&cmd), Operation::Write(data)])
             .await
             .map_err(Error::IO)?;
-        self.block_until_ready(Duration::from_millis(3 + 1)).await?;
+        self.block_until_ready(Duration::from_millis(3 + 2)).await?;
 
         trace!("write page - done: at {}", addr);
+        Ok(())
+    }
+
+    pub async fn write_page_partial(&mut self, addr: Addr, data: &[u8]) -> Result<(), Error<SPI>> {
+        trace!("write page partial - init: at {}", addr);
+
+        if addr / PAGE_SIZE != (addr + data.len() as u32) / PAGE_SIZE {
+            return Err(Error::WriteAcrossPageBoundary {
+                addr,
+                data_len: data.len() as u32,
+            });
+        }
+
+        self.enable_write().await?;
+
+        let mut cmd = [0u8; 4];
+        cmd[0] = 0x02;
+        Self::addr_write_bytes(addr, cmd.sub_array_mut(1), None)?;
+
+        self.spi
+            .transaction(&mut [Operation::Write(&cmd), Operation::Write(data)])
+            .await
+            .map_err(Error::IO)?;
+        self.block_until_ready(Duration::from_millis(3 + 2)).await?;
+
+        trace!("write page partial - done: at {}", addr);
         Ok(())
     }
 

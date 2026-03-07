@@ -1,6 +1,7 @@
 #![no_std]
 
-pub use memory::*;
+pub use driver::*;
 
-mod memory;
+mod driver;
+mod ekv_impl;
 mod util;

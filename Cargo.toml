@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 bitflags = "2.10.0"
+ekv = { git = "https://github.com/embassy-rs/ekv", version = "1.0.0", optional = true }
 embassy-time = { version = "0.5.0", default-features = false }
 embedded-hal-async = "1.0.0"
 log = { version = "0.4.29", optional = true }
@@ -12,4 +13,5 @@ sub-array = "0.1.1"
 thiserror = { version = "2.0.17", default-features = false }
 
 [features]
+ekv = ["dep:ekv"]
 log = ["dep:log"]
