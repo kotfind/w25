@@ -208,7 +208,7 @@ impl<SPI: SpiDevice> Memory<SPI> {
     pub async fn write_page_partial(&mut self, addr: Addr, data: &[u8]) -> Result<(), Error<SPI>> {
         trace!("write page partial - init: at {}", addr);
 
-        if addr / PAGE_SIZE != (addr + data.len() as u32) / PAGE_SIZE {
+        if addr / PAGE_SIZE != (addr + data.len() as u32 - 1) / PAGE_SIZE {
             return Err(Error::WriteAcrossPageBoundary {
                 addr,
                 data_len: data.len() as u32,
